@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth/auth-service';
 
 @Component({
   selector: 'app-header',
@@ -11,7 +12,16 @@ import { RouterLink } from '@angular/router';
           <span class="brand__mark" aria-hidden="true">⚡</span>
           Zap App
         </a>
-        <!-- M1: signed-in user (avatar, login) and Sign out go here. -->
+
+        @if (auth.user(); as user) {
+          <div class="account">
+            @if (user.avatarUrl) {
+              <img class="avatar" [src]="user.avatarUrl" alt="" width="28" height="28" />
+            }
+            <span class="account__login">{{ user.login }}</span>
+            <button class="btn btn-small" type="button" (click)="signOut()">Sign out</button>
+          </div>
+        }
       </div>
     </header>
   `,
@@ -45,6 +55,33 @@ import { RouterLink } from '@angular/router';
       color: var(--accent-contrast);
       font-size: 0.9rem;
     }
+    .account {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .avatar {
+      border-radius: 50%;
+      border: 1px solid var(--border);
+    }
+    .account__login {
+      font-weight: 500;
+    }
+    .btn-small {
+      height: 30px;
+      padding: 0 10px;
+      font-size: 0.85rem;
+    }
   `,
 })
-export class Header {}
+export class Header {
+  protected readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+
+  protected signOut(): void {
+    this.auth.logout().subscribe({
+      complete: () => void this.router.navigate(['/login']),
+      error: () => void this.router.navigate(['/login']),
+    });
+  }
+}

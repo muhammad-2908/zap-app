@@ -5,13 +5,14 @@ A small workflow automation app inspired by Zapier's Zaps: sign in with GitHub, 
 
 TypeScript throughout on the MEAN stack: MongoDB, Express 5, Angular 21, Node.js.
 
-> Status: **M0 — skeleton**. Sign-in, the Zap builder and the GitHub automation arrive in later milestones.
+> Status: **M1 — GitHub sign-in**. The Zap builder and the GitHub automation arrive in later milestones.
 
 ## Time log
 
 | Milestone | Started | Finished |
 | --- | --- | --- |
 | M0 Skeleton | _fill in_ | _fill in_ |
+| M1 GitHub sign-in | _fill in_ | _fill in_ |
 
 ## Repository layout
 
@@ -35,7 +36,8 @@ docker-compose.yml Optional local MongoDB
    copy .env.example .env      # macOS/Linux: cp .env.example .env
    ```
 
-   Fill in `MONGODB_URI` (keep `/zap-app` as the database name). The other variables are used from M1 onward.
+   Fill in `MONGODB_URI` (keep `/zap-app` as the database name), the GitHub OAuth App values and the
+   two generated secrets. See [GitHub OAuth App](#github-oauth-app) below.
 
 2. Start the API (terminal 1):
 
@@ -58,6 +60,32 @@ docker-compose.yml Optional local MongoDB
    Open http://localhost:4200. The dev server proxies `/api/*` to the API on port 3000
    (`proxy.conf.json`), so the browser only ever talks to one origin.
 
+## GitHub OAuth App
+
+Sign-in uses a GitHub **OAuth App** (not a GitHub App). Create one at GitHub → Settings → Developer
+settings → OAuth Apps → New OAuth App:
+
+| Field | Value |
+| --- | --- |
+| Homepage URL | `http://localhost:4200` |
+| Authorization callback URL | `http://localhost:4200/api/auth/github/callback` |
+
+Copy the Client ID and a generated client secret into `.env`. The callback goes through the Angular
+dev server's proxy, so the session cookie is set on the same origin as the app.
+
+**How sign-in works**
+
+1. "Sign in with GitHub" navigates to `/api/auth/github`. The API stores a random `state` in a short-lived
+   httpOnly cookie and redirects to GitHub with scopes `read:user repo admin:repo_hook`.
+2. GitHub redirects back to `/api/auth/github/callback?code&state`. The API checks `state` against the
+   cookie, exchanges the code for a token, loads the GitHub profile and upserts the user by GitHub id.
+3. The GitHub token is stored **encrypted** (AES-256-GCM, `TOKEN_ENCRYPTION_KEY`) and is never sent to
+   the browser. The browser gets a signed session JWT in an httpOnly, SameSite=Lax cookie (8h).
+4. Angular calls `/api/auth/me` at startup; route guards send signed-out users to `/login`.
+
+`repo` and `admin:repo_hook` are requested now because later milestones install a webhook and post PR
+comments with this token; asking once avoids a second consent screen.
+
 ## Scripts
 
 | Where | Command | What it does |
@@ -74,6 +102,10 @@ docker-compose.yml Optional local MongoDB
 | Method | Path | Response |
 | --- | --- | --- |
 | GET | `/api/health` | `200 {"status":"ok","db":"connected",...}` or `503 {"status":"degraded",...}` |
+| GET | `/api/auth/github` | `302` to GitHub's consent page |
+| GET | `/api/auth/github/callback` | `302` to `/zaps`, or to `/login?error=denied\|state\|github` |
+| GET | `/api/auth/me` | `200` current user (no token), `401 unauthenticated` |
+| POST | `/api/auth/logout` | `204`, clears the session cookie |
 
 Errors always use `{ "error": { "code", "message", "details?" } }`.
 

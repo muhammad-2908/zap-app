@@ -5,6 +5,16 @@ export interface Health {
   uptimeSeconds: number;
 }
 
+/** The signed-in user, from GET /api/auth/me. The GitHub token never reaches the browser. */
+export interface User {
+  id: string;
+  githubId: number;
+  login: string;
+  name: string | null;
+  avatarUrl: string | null;
+  tokenStatus: 'valid' | 'revoked';
+}
+
 /** Error body every API route uses. */
 export interface ApiError {
   error: { code: string; message: string; details?: unknown };

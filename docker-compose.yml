@@ -1,0 +1,15 @@
+# Optional local MongoDB for anyone who doesn't want to use Atlas.
+# Start:  docker compose up -d
+# Then:   MONGODB_URI=mongodb://localhost:27017/zap-app
+services:
+  mongo:
+    image: mongo:7
+    container_name: zap-app-mongo
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

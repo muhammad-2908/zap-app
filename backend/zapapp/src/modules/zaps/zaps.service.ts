@@ -2,6 +2,7 @@ import { isValidObjectId } from 'mongoose';
 import { assertValidZap, type ZapShape } from '../../catalog/validate-zap.js';
 import { HttpError } from '../../lib/http-error.js';
 import { ZapModel, type ZapDoc } from '../../models/zap.model.js';
+import { ensureHook } from '../hooks/hooks.service.js';
 import type { CreateZapInput, UpdateZapInput } from './zaps.schema.js';
 
 export interface ZapDto extends ZapShape {
@@ -32,6 +33,11 @@ function toDto(doc: ZapDoc): ZapDto {
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };
+}
+
+/** Repository the trigger listens on. Validated by the catalog before this is called. */
+function repoOf(zap: ZapShape): string {
+  return zap.trigger.config['repoFullName'] ?? '';
 }
 
 const notFound = () => new HttpError(404, 'zap_not_found', 'Zap not found');
@@ -66,7 +72,8 @@ export async function createZap(
   source: 'manual' | 'copilot' = 'manual',
 ): Promise<ZapDto> {
   assertValidZap(input);
-  // M3: when input.enabled, install the repository webhook here before saving.
+  // An enabled Zap must be able to fire: install the webhook first; if that fails, nothing is saved.
+  if (input.enabled) await ensureHook(ownerId, repoOf(input));
   const doc = await ZapModel.create({ ...input, owner: ownerId, source });
   return toDto(doc.toObject() as unknown as ZapDoc);
 }
@@ -84,7 +91,9 @@ export async function updateZap(ownerId: string, zapId: string, patch: UpdateZap
   // Validate the whole resulting Zap, not just the patch: e.g. a new trigger must still
   // provide every variable the existing comment uses.
   assertValidZap(merged);
-  // M3: when merged.enabled, install the webhook for merged.trigger.config.repoFullName here.
+  // Saving an enabled Zap (turning it on, or editing it while on, possibly to another repo)
+  // ensures the webhook first. If GitHub refuses, the Zap is left as it was.
+  if (merged.enabled) await ensureHook(ownerId, repoOf(merged));
 
   // trigger.key is recomputed by the model's pre-validate hook.
   doc.set({ name: merged.name, enabled: merged.enabled, trigger: merged.trigger, action: merged.action });

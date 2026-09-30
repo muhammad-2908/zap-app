@@ -213,6 +213,9 @@
             [checked]="form.controls.enabled.value"
             (changed)="setEnabled($event)"
           />
+          <p class="help muted">
+            Turning a Zap on installs a webhook on its repository so GitHub can notify this app.
+          </p>
         </div>
       </section>
 

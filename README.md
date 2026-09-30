@@ -5,15 +5,16 @@ A small workflow automation app inspired by Zapier's Zaps: sign in with GitHub, 
 
 TypeScript throughout on the MEAN stack: MongoDB, Express 5, Angular 21, Node.js.
 
-> Status: **M2 — Zap builder**. Zaps can be created, listed, edited and turned on/off. Running them on real pull requests arrives in M3–M4.
+> Status: **M3 — Webhooks**. Turning a Zap on installs a GitHub webhook; opening a PR is received, verified and matched to the right Zaps. Posting the comment arrives in M4.
 
 ## Time log
 
 | Milestone | Started | Finished |
 | --- | --- | --- |
-| M0 Skeleton | _fill in_ | _fill in_ |
-| M1 GitHub sign-in | _fill in_ | _fill in_ |
-| M2 Zap builder | _fill in_ | _fill in_ |
+| M0 Skeleton | _fill in_ | 60 mins |
+| M1 GitHub sign-in | _fill in_ | 30 mins |
+| M2 Zap builder | _fill in_ | 30 mins |
+| M3 Webhooks | _fill in_ | 10 mins |
 
 ## Repository layout
 
@@ -37,8 +38,9 @@ docker-compose.yml Optional local MongoDB
    copy .env.example .env      # macOS/Linux: cp .env.example .env
    ```
 
-   Fill in `MONGODB_URI` (keep `/zap-app` as the database name), the GitHub OAuth App values and the
-   two generated secrets. See [GitHub OAuth App](#github-oauth-app) below.
+   Fill in `MONGODB_URI` (keep `/zap-app` as the database name), the GitHub OAuth App values, the
+   generated secrets and the webhook URL. See [GitHub OAuth App](#github-oauth-app) and
+   [Webhooks](#webhooks-ngrok) below.
 
 2. Start the API (terminal 1):
 
@@ -87,6 +89,21 @@ dev server's proxy, so the session cookie is set on the same origin as the app.
 `repo` and `admin:repo_hook` are requested now because later milestones install a webhook and post PR
 comments with this token; asking once avoids a second consent screen.
 
+## Webhooks (ngrok)
+
+GitHub must reach the API to deliver pull request events, so in development the API is exposed with
+an ngrok **static** domain (the webhook URL is stored on GitHub, so it must not change between runs):
+
+```
+ngrok http 3000 --url=https://<your-static-domain>.ngrok-free.app
+```
+
+Set `PUBLIC_WEBHOOK_URL=https://<your-static-domain>.ngrok-free.app/api/webhooks/github` and a random
+`GITHUB_WEBHOOK_SECRET`. Check the tunnel with `curl https://<your-static-domain>.ngrok-free.app/api/health`.
+
+You don't configure anything on GitHub: when a Zap is turned on, the API creates (or reuses) a
+`pull_request` webhook on that repository with this URL and secret. It needs admin access to the repo.
+
 ## Scripts
 
 | Where | Command | What it does |
@@ -110,9 +127,10 @@ comments with this token; asking once avoids a second consent screen.
 | GET | `/api/catalog` | Apps, triggers, actions, fields and template variables |
 | GET | `/api/github/repos[?fresh=1]` | Repos the user can administer · `401 github_reauth_required` |
 | GET | `/api/zaps` | The caller's Zaps, newest first |
-| POST | `/api/zaps` | `201` Zap · `400 validation_error` with field `details` |
+| POST | `/api/zaps` | `201` Zap · `400 validation_error` with field `details` · `422 hook_install_failed` |
 | GET | `/api/zaps/:id` | `200` · `404 zap_not_found` (also for other users' Zaps) |
-| PATCH | `/api/zaps/:id` | Partial update incl. `enabled` · `400` · `404` |
+| PATCH | `/api/zaps/:id` | Partial update incl. `enabled` · `400` · `404` · `422 hook_install_failed` |
+| POST | `/api/webhooks/github` | GitHub only, HMAC-signed · `200` ping · `202` PR opened · `204` ignored · `401` bad signature |
 
 Errors always use `{ "error": { "code", "message", "details?" } }`.
 

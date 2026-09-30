@@ -8,6 +8,7 @@ import { authRouter } from './modules/auth/auth.routes.js';
 import { catalogRouter } from './modules/catalog/catalog.routes.js';
 import { githubRouter } from './modules/github/github.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
+import { webhooksRouter } from './modules/webhooks/webhooks.routes.js';
 import { zapsRouter } from './modules/zaps/zaps.routes.js';
 
 /** Builds the Express app without starting it, so tests can drive it with supertest. */
@@ -27,8 +28,9 @@ export function buildApp(): Express {
   );
   app.use(cookieParser());
 
-  // M3: the GitHub webhook router mounts here with express.raw(), BEFORE express.json(),
-  // because signature verification needs the exact raw bytes.
+  // Webhooks first, with their own raw-body parser: signature verification needs the exact bytes,
+  // so express.json() must not touch these requests.
+  app.use('/api/webhooks', webhooksRouter);
 
   app.use(express.json({ limit: '100kb' }));
 

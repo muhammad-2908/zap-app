@@ -35,6 +35,16 @@ const EnvSchema = z.object({
   JWT_SECRET: noPlaceholder('JWT_SECRET').refine((v) => v.length >= 32, 'JWT_SECRET must be at least 32 characters'),
   TOKEN_ENCRYPTION_KEY: base64Key32('TOKEN_ENCRYPTION_KEY'),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(8),
+
+  // Webhooks: the public URL GitHub posts to (ngrok in development) and the HMAC secret it signs with.
+  PUBLIC_WEBHOOK_URL: z
+    .url({ message: 'PUBLIC_WEBHOOK_URL must be a URL, e.g. https://your-name.ngrok-free.app/api/webhooks/github' })
+    .refine((v) => v.startsWith('https://'), 'PUBLIC_WEBHOOK_URL must use https (GitHub requires it here)')
+    .refine((v) => v.endsWith('/api/webhooks/github'), 'PUBLIC_WEBHOOK_URL must end with /api/webhooks/github'),
+  GITHUB_WEBHOOK_SECRET: noPlaceholder('GITHUB_WEBHOOK_SECRET').refine(
+    (v) => v.length >= 20,
+    'GITHUB_WEBHOOK_SECRET must be at least 20 characters (use the randomBytes(32) command)',
+  ),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

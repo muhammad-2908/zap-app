@@ -11,11 +11,14 @@ const USER_AGENT = 'zap-app';
 
 export class GitHubError extends Error {
   readonly status: number;
+  /** GitHub's `errors` array on 422 responses, e.g. [{ message: 'Hook already exists on this repository' }]. */
+  readonly errors: { message?: string; code?: string }[];
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, errors: { message?: string; code?: string }[] = []) {
     super(message);
     this.name = 'GitHubError';
     this.status = status;
+    this.errors = errors;
   }
 }
 
@@ -79,8 +82,8 @@ export async function githubRequest<T>(token: string, path: string, init: Reques
     signal: init.signal ?? AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new GitHubError(res.status, body.message ?? `GitHub API ${res.status}`);
+    const body = (await res.json().catch(() => ({}))) as { message?: string; errors?: { message?: string }[] };
+    throw new GitHubError(res.status, body.message ?? `GitHub API ${res.status}`, body.errors ?? []);
   }
   return (res.status === 204 ? undefined : await res.json()) as T;
 }

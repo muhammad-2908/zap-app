@@ -4,10 +4,12 @@ import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/modules/hooks/hooks.service.js', () => ({ findHookById: vi.fn(), ensureHook: vi.fn() }));
+vi.mock('../src/modules/engine/run-zap.js', () => ({ runMatchedZaps: vi.fn().mockResolvedValue([]) }));
 
 const { buildApp } = await import('../src/app.js');
 const hooks = await import('../src/modules/hooks/hooks.service.js');
 const { ZapModel } = await import('../src/models/zap.model.js');
+const engine = await import('../src/modules/engine/run-zap.js');
 
 const SECRET = 'test-webhook-secret-0123456789';
 const OWNER = new Types.ObjectId();
@@ -43,6 +45,7 @@ describe('POST /api/webhooks/github', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.mocked(hooks.findHookById).mockReset();
+    vi.mocked(engine.runMatchedZaps).mockClear();
   });
 
   it('rejects a delivery signed with another secret', async () => {
@@ -83,7 +86,8 @@ describe('POST /api/webhooks/github', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const lean = vi.fn().mockResolvedValue([{ _id: new Types.ObjectId() }, { _id: new Types.ObjectId() }]);
+    const matched = [{ _id: new Types.ObjectId() }, { _id: new Types.ObjectId() }];
+    const lean = vi.fn().mockResolvedValue(matched);
     const find = vi.spyOn(ZapModel, 'find').mockReturnValue({ lean } as never);
 
     const res = await deliver('pull_request', prOpened());
@@ -96,6 +100,8 @@ describe('POST /api/webhooks/github', () => {
       'trigger.key': 'github:pull_request.opened',
       'trigger.config.repoFullName': 'alice/zap-test',
     });
+    // Runs start after the 202 is sent, with the delivery id for idempotency.
+    expect(engine.runMatchedZaps).toHaveBeenCalledWith(matched, 'd-1', expect.objectContaining({ number: 7 }));
   });
 
   it('accepts but runs nothing for an unknown hook id', async () => {
@@ -105,6 +111,7 @@ describe('POST /api/webhooks/github', () => {
     expect(res.status).toBe(202);
     expect(res.body.matched).toBe(0);
     expect(find).not.toHaveBeenCalled();
+    expect(engine.runMatchedZaps).not.toHaveBeenCalled();
   });
 
   it('returns 400 for a correctly signed body that is not JSON', async () => {

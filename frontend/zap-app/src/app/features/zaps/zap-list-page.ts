@@ -88,7 +88,7 @@ export class ZapListPage implements OnInit {
 
   protected lastRun(zap: Zap): string {
     if (!zap.lastRunAt) return 'Never run';
-    const outcome = zap.lastRunStatus === 'failed' ? 'Failed' : 'Ran';
+    const outcome = zap.lastRunStatus === 'failed' ? 'Failed' : 'Commented';
     return `${outcome} ${relativeTime(zap.lastRunAt)}`;
   }
 

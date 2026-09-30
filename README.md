@@ -5,7 +5,7 @@ A small workflow automation app inspired by Zapier's Zaps: sign in with GitHub, 
 
 TypeScript throughout on the MEAN stack: MongoDB, Express 5, Angular 21, Node.js.
 
-> Status: **M3 — Webhooks**. Turning a Zap on installs a GitHub webhook; opening a PR is received, verified and matched to the right Zaps. Posting the comment arrives in M4.
+> Status: **M4 — End to end**. Opening a pull request on a repo with an enabled Zap posts the configured comment on that pull request.
 
 ## Time log
 
@@ -15,6 +15,7 @@ TypeScript throughout on the MEAN stack: MongoDB, Express 5, Angular 21, Node.js
 | M1 GitHub sign-in | _fill in_ | 30 mins |
 | M2 Zap builder | _fill in_ | 30 mins |
 | M3 Webhooks | _fill in_ | 10 mins |
+| M4 PR comment | _fill in_ | 25 mins |
 
 ## Repository layout
 
@@ -103,6 +104,18 @@ Set `PUBLIC_WEBHOOK_URL=https://<your-static-domain>.ngrok-free.app/api/webhooks
 
 You don't configure anything on GitHub: when a Zap is turned on, the API creates (or reuses) a
 `pull_request` webhook on that repository with this URL and secret. It needs admin access to the repo.
+
+## Try the main flow
+
+1. Sign in, create a Zap: GitHub · Pull request opened · `<you>/zap-test` → GitHub · Comment on pull
+   request, comment `Thanks @{{pr.author}} for opening #{{pr.number}}!`, turn it **On**, save.
+2. Open a pull request on that repository (e.g. edit the README on github.com → "Create a new branch" →
+   "Propose changes" → "Create pull request").
+3. Within a few seconds the comment appears on the pull request, and the Zap list shows
+   "Commented … ago" (press Refresh).
+
+Each delivery runs a Zap at most once (redelivering the webhook does not comment again). A failed run
+shows its reason on the Zap list.
 
 ## Scripts
 

@@ -8,6 +8,10 @@ h1 {
   font-size: 1.5rem;
   margin: 0;
 }
+.page-head__actions {
+  display: flex;
+  gap: 8px;
+}
 .list {
   display: grid;
   gap: 10px;

@@ -1,6 +1,11 @@
 <div class="page-head">
   <h1>Your Zaps</h1>
-  <a class="btn btn-primary" routerLink="/zaps/new">Create Zap</a>
+  <div class="page-head__actions">
+    <button class="btn" type="button" (click)="load()" [disabled]="state() === 'loading'">
+      Refresh
+    </button>
+    <a class="btn btn-primary" routerLink="/zaps/new">Create Zap</a>
+  </div>
 </div>
 
 @switch (state()) {
@@ -32,8 +37,12 @@
               <span
                 class="zap__meta muted"
                 [class.zap__meta--failed]="zap.lastRunStatus === 'failed'"
+                [attr.title]="zap.lastRunError"
               >
                 {{ lastRun(zap) }}
+                @if (zap.lastRunStatus === 'failed' && zap.lastRunError) {
+                  · {{ zap.lastRunError }}
+                }
               </span>
             </div>
             <div class="zap__side">

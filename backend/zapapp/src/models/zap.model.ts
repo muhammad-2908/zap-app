@@ -22,6 +22,8 @@ const zapSchema = new Schema(
     source: { type: String, enum: ['manual', 'copilot'], default: 'manual' },
     lastRunAt: { type: Date, default: null },
     lastRunStatus: { type: String, enum: ['success', 'failed', null], default: null },
+    // Short reason for the last failure, shown on the Zap list.
+    lastRunError: { type: String, default: null },
   },
   { timestamps: true, minimize: false },
 );
@@ -48,6 +50,7 @@ export interface ZapDoc {
   source: 'manual' | 'copilot';
   lastRunAt: Date | null;
   lastRunStatus: 'success' | 'failed' | null;
+  lastRunError?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

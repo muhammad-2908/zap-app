@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import { env } from '../../config/env.js';
 import { HttpError } from '../../lib/http-error.js';
 import { verifyGithubSignature } from '../../lib/webhook-signature.js';
+import { runMatchedZaps } from '../engine/run-zap.js';
 import { findZapsForPullRequestOpened, type PullRequestOpenedPayload } from './dispatcher.js';
 
 export const webhooksRouter = Router();
@@ -55,6 +56,9 @@ webhooksRouter.post('/github', express.raw({ type: 'application/json', limit: '5
     log.info({ ...context, matched: zaps.length, zapIds: zaps.map((z) => z._id.toString()) }, `${zaps.length} Zap(s) matched`);
   }
 
-  // Answer fast (GitHub gives up after 10 s). M4 runs the matched Zaps after this response.
+  // Answer fast (GitHub gives up after 10 s), then run the Zaps. Outcomes are recorded per run.
   res.status(202).json({ delivery, matched: zaps.length });
+  if (zaps.length) {
+    void runMatchedZaps(zaps, delivery, pr).catch((err: unknown) => log.error({ err }, 'Running Zaps failed'));
+  }
 });

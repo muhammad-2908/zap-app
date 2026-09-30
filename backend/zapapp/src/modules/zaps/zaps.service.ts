@@ -10,6 +10,7 @@ export interface ZapDto extends ZapShape {
   source: 'manual' | 'copilot';
   lastRunAt: string | null;
   lastRunStatus: 'success' | 'failed' | null;
+  lastRunError: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +31,7 @@ function toDto(doc: ZapDoc): ZapDto {
     source: doc.source,
     lastRunAt: doc.lastRunAt ? doc.lastRunAt.toISOString() : null,
     lastRunStatus: doc.lastRunStatus ?? null,
+    lastRunError: doc.lastRunError ?? null,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };

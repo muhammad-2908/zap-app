@@ -84,6 +84,8 @@ export interface Zap extends ZapInput {
   source: 'manual' | 'copilot';
   lastRunAt: string | null;
   lastRunStatus: 'success' | 'failed' | null;
+  /** Why the last run failed (null after a success). */
+  lastRunError: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -5,7 +5,10 @@ import { pinoHttp } from 'pino-http';
 import { logger } from './lib/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { catalogRouter } from './modules/catalog/catalog.routes.js';
+import { githubRouter } from './modules/github/github.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
+import { zapsRouter } from './modules/zaps/zaps.routes.js';
 
 /** Builds the Express app without starting it, so tests can drive it with supertest. */
 export function buildApp(): Express {
@@ -31,6 +34,9 @@ export function buildApp(): Express {
 
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
+  app.use('/api/catalog', catalogRouter);
+  app.use('/api/github', githubRouter);
+  app.use('/api/zaps', zapsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

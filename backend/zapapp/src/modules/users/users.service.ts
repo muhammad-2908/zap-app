@@ -1,5 +1,5 @@
 import { isValidObjectId } from 'mongoose';
-import { encryptSecret } from '../../lib/crypto.js';
+import { decryptSecret, encryptSecret } from '../../lib/crypto.js';
 import type { GitHubUser } from '../../lib/github-client.js';
 import { UserModel, type UserDoc } from '../../models/user.model.js';
 
@@ -50,4 +50,17 @@ export async function findUserById(id: string): Promise<PublicUser | null> {
   if (!isValidObjectId(id)) return null;
   const doc = await UserModel.findById(id).lean<UserDoc>();
   return doc ? toPublicUser(doc) : null;
+}
+
+/** Decrypted GitHub token for server-side API calls. Never send the result to a client. */
+export async function getGithubToken(userId: string): Promise<string | null> {
+  if (!isValidObjectId(userId)) return null;
+  const doc = await UserModel.findById(userId).select('+accessTokenEnc').lean<UserDoc>();
+  return doc?.accessTokenEnc ? decryptSecret(doc.accessTokenEnc) : null;
+}
+
+/** Called when GitHub rejects the stored token (revoked app access, expired, etc.). */
+export async function markGithubTokenRevoked(userId: string): Promise<void> {
+  if (!isValidObjectId(userId)) return;
+  await UserModel.updateOne({ _id: userId }, { $set: { tokenStatus: 'revoked' } });
 }

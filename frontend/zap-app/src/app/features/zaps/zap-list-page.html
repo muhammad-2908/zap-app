@@ -1,0 +1,66 @@
+<div class="page-head">
+  <h1>Your Zaps</h1>
+  <a class="btn btn-primary" routerLink="/zaps/new">Create Zap</a>
+</div>
+
+@switch (state()) {
+  @case ('loading') {
+    <div class="list">
+      @for (i of [1, 2]; track i) {
+        <div class="card zap zap--skeleton" aria-hidden="true"></div>
+      }
+    </div>
+  }
+  @case ('error') {
+    <div class="card">
+      <p class="error-text">{{ error() }}</p>
+      <button class="btn" type="button" (click)="load()">Try again</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (zaps().length) {
+      <ul class="list" aria-label="Zaps">
+        @for (zap of zaps(); track zap.id) {
+          <li class="card zap" [class.zap--off]="!zap.enabled">
+            <div class="zap__main">
+              <a class="zap__name" [routerLink]="['/zaps', zap.id]">{{ zap.name }}</a>
+              <div class="zap__flow">
+                <span class="pill">{{ triggerSummary(zap) }}</span>
+                <span class="arrow" aria-hidden="true">→</span>
+                <span class="pill">{{ actionSummary(zap) }}</span>
+              </div>
+              <span
+                class="zap__meta muted"
+                [class.zap__meta--failed]="zap.lastRunStatus === 'failed'"
+              >
+                {{ lastRun(zap) }}
+              </span>
+            </div>
+            <div class="zap__side">
+              <app-status-toggle
+                [checked]="zap.enabled"
+                [disabled]="toggling().has(zap.id)"
+                [label]="'Turn ' + zap.name + (zap.enabled ? ' off' : ' on')"
+                (changed)="toggle(zap, $event)"
+              />
+              <a class="btn btn-small" [routerLink]="['/zaps', zap.id]">Edit</a>
+            </div>
+          </li>
+        }
+      </ul>
+    } @else {
+      <div class="card empty">
+        <p class="empty__title">No Zaps yet</p>
+        <p class="muted">Start with: when a pull request is opened, comment on it.</p>
+        <a class="btn btn-primary" routerLink="/zaps/new">Create your first Zap</a>
+      </div>
+    }
+  }
+}
+
+@if (health(); as h) {
+  <p class="status muted">
+    <span class="dot" [class.dot--ok]="h.db === 'connected'"></span>
+    API reachable · database {{ h.db }}
+  </p>
+}

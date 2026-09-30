@@ -1,147 +1,107 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
+import { apiErrorMessage } from '../../core/api/api-errors';
+import { CatalogApi, findAction, findApp, findTrigger } from '../../core/api/catalog-api';
 import { HealthApi } from '../../core/api/health-api';
-import { Health } from '../../core/models';
+import { ZapsApi } from '../../core/api/zaps-api';
+import { CatalogApp, Health, Zap } from '../../core/models';
+import { ToastService } from '../../core/ui/toast-service';
+import { StatusToggle } from './components/status-toggle';
+import { relativeTime } from './relative-time';
 
-type StatusView = { kind: 'loading' } | { kind: 'ready'; health: Health } | { kind: 'unreachable' };
-
-/** M0 stub: empty Zap list plus a status card proving Angular -> proxy -> Express -> MongoDB. */
+/** /zaps — the signed-in user's Zaps with on/off toggles. */
 @Component({
   selector: 'app-zap-list-page',
-  template: `
-    <div class="page-head">
-      <h1>Your Zaps</h1>
-      <button class="btn btn-primary" type="button" disabled title="The builder arrives in M2">
-        Create Zap
-      </button>
-    </div>
-
-    <div class="card empty">
-      <p class="empty__title">No Zaps yet</p>
-      <p class="muted">
-        When a pull request is opened, comment on it. The builder arrives in milestone M2.
-      </p>
-    </div>
-
-    <section class="card status" aria-live="polite">
-      <div class="status__head">
-        <h2>System status</h2>
-        <button class="btn" type="button" (click)="load()" [disabled]="view().kind === 'loading'">
-          Refresh
-        </button>
-      </div>
-
-      @switch (view().kind) {
-        @case ('loading') {
-          <p class="muted">Checking…</p>
-        }
-        @case ('unreachable') {
-          <p>
-            <span class="dot dot--bad"></span>API unreachable. Is the backend running on port 3000?
-          </p>
-        }
-        @case ('ready') {
-          @if (health(); as h) {
-            <dl class="status__grid">
-              <dt>API</dt>
-              <dd><span class="dot dot--ok"></span>reachable</dd>
-              <dt>Database</dt>
-              <dd>
-                <span
-                  class="dot"
-                  [class.dot--ok]="h.db === 'connected'"
-                  [class.dot--bad]="h.db !== 'connected'"
-                ></span>
-                {{ h.db }}
-              </dd>
-              <dt>Uptime</dt>
-              <dd>{{ h.uptimeSeconds }}s</dd>
-            </dl>
-          }
-        }
-      }
-    </section>
-  `,
-  styles: `
-    .page-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 24px 0 16px;
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin: 0;
-    }
-    .empty {
-      text-align: center;
-      padding: 40px 24px;
-    }
-    .empty__title {
-      font-weight: 600;
-      margin: 0 0 4px;
-    }
-    .empty p {
-      margin: 0;
-    }
-    .status {
-      margin-top: 16px;
-    }
-    .status__head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    h2 {
-      font-size: 1rem;
-      margin: 0;
-    }
-    .status__grid {
-      display: grid;
-      grid-template-columns: max-content 1fr;
-      gap: 8px 24px;
-      margin: 16px 0 0;
-    }
-    dt {
-      color: var(--text-muted);
-    }
-    dd {
-      margin: 0;
-    }
-    .dot {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-right: 8px;
-      vertical-align: middle;
-      background: var(--text-muted);
-    }
-    .dot--ok {
-      background: var(--ok);
-    }
-    .dot--bad {
-      background: var(--danger);
-    }
-  `,
+  imports: [RouterLink, StatusToggle],
+  templateUrl: './zap-list-page.html',
+  styleUrl: './zap-list-page.scss',
 })
 export class ZapListPage implements OnInit {
+  private readonly zapsApi = inject(ZapsApi);
+  private readonly catalogApi = inject(CatalogApi);
   private readonly healthApi = inject(HealthApi);
+  private readonly toast = inject(ToastService);
 
-  protected readonly view = signal<StatusView>({ kind: 'loading' });
-  protected readonly health = computed(() => {
-    const v = this.view();
-    return v.kind === 'ready' ? v.health : undefined;
-  });
+  protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
+  protected readonly error = signal('');
+  protected readonly zaps = signal<Zap[]>([]);
+  protected readonly catalog = signal<CatalogApp[]>([]);
+  /** Ids of Zaps whose toggle request is in flight. */
+  protected readonly toggling = signal<ReadonlySet<string>>(new Set());
+  protected readonly health = signal<Health | null>(null);
 
   ngOnInit(): void {
     this.load();
+    this.healthApi
+      .get()
+      .subscribe({ next: (h) => this.health.set(h), error: () => this.health.set(null) });
   }
 
   protected load(): void {
-    this.view.set({ kind: 'loading' });
-    this.healthApi.get().subscribe({
-      next: (health) => this.view.set({ kind: 'ready', health }),
-      error: () => this.view.set({ kind: 'unreachable' }),
+    this.state.set('loading');
+    forkJoin({ zaps: this.zapsApi.list(), catalog: this.catalogApi.getCatalog() }).subscribe({
+      next: ({ zaps, catalog }) => {
+        this.zaps.set(zaps);
+        this.catalog.set(catalog);
+        this.state.set('ready');
+      },
+      error: (err) => {
+        this.error.set(apiErrorMessage(err, 'Could not load your Zaps.'));
+        this.state.set('error');
+      },
+    });
+  }
+
+  /** Optimistic: flip immediately, revert and explain if the API refuses. */
+  protected toggle(zap: Zap, enabled: boolean): void {
+    this.setToggling(zap.id, true);
+    this.replace({ ...zap, enabled });
+    this.zapsApi.update(zap.id, { enabled }).subscribe({
+      next: (saved) => {
+        this.replace(saved);
+        this.setToggling(zap.id, false);
+        this.toast.success(`"${saved.name}" is ${saved.enabled ? 'on' : 'off'}`);
+      },
+      error: (err) => {
+        this.replace(zap);
+        this.setToggling(zap.id, false);
+        this.toast.error(apiErrorMessage(err, 'Could not change the Zap status.'));
+      },
+    });
+  }
+
+  protected triggerSummary(zap: Zap): string {
+    const app = findApp(this.catalog(), zap.trigger.app)?.name ?? zap.trigger.app;
+    const event =
+      findTrigger(this.catalog(), zap.trigger.app, zap.trigger.event)?.name ?? zap.trigger.event;
+    const repo = zap.trigger.config['repoFullName'];
+    return [app, event, repo].filter(Boolean).join(' · ');
+  }
+
+  protected actionSummary(zap: Zap): string {
+    const app = findApp(this.catalog(), zap.action.app)?.name ?? zap.action.app;
+    const action =
+      findAction(this.catalog(), zap.action.app, zap.action.type)?.name ?? zap.action.type;
+    return `${app} · ${action}`;
+  }
+
+  protected lastRun(zap: Zap): string {
+    if (!zap.lastRunAt) return 'Never run';
+    const outcome = zap.lastRunStatus === 'failed' ? 'Failed' : 'Ran';
+    return `${outcome} ${relativeTime(zap.lastRunAt)}`;
+  }
+
+  private replace(zap: Zap): void {
+    this.zaps.update((list) => list.map((z) => (z.id === zap.id ? zap : z)));
+  }
+
+  private setToggling(id: string, on: boolean): void {
+    this.toggling.update((set) => {
+      const next = new Set(set);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
     });
   }
 }

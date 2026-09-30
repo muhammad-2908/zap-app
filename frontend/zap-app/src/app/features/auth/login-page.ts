@@ -5,6 +5,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   state: 'Your sign-in link expired. Please try again.',
   github: 'GitHub could not complete the sign-in. Please try again in a moment.',
   expired: 'Your session has ended. Please sign in again.',
+  reauth: 'GitHub access has expired or was revoked. Sign in again to reconnect.',
 };
 
 @Component({

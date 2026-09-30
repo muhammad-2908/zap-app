@@ -1,0 +1,231 @@
+<div class="page-head">
+  <a class="back" routerLink="/zaps">← Your Zaps</a>
+  <h1>{{ isEdit() ? 'Edit Zap' : 'Create Zap' }}</h1>
+</div>
+
+@switch (pageState()) {
+  @case ('loading') {
+    <div class="card muted">Loading…</div>
+  }
+  @case ('not-found') {
+    <div class="card">
+      <p>
+        <strong>Zap not found.</strong> It may have been deleted, or it belongs to another account.
+      </p>
+      <a class="btn" routerLink="/zaps">Back to your Zaps</a>
+    </div>
+  }
+  @case ('error') {
+    <div class="card">
+      <p class="error-text">{{ pageError() }}</p>
+      <a class="btn" routerLink="/zaps">Back to your Zaps</a>
+    </div>
+  }
+  @case ('ready') {
+    <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+      <!-- 1. Trigger -->
+      <section class="card step">
+        <header class="step__head">
+          <span class="step__num">1</span>
+          <div>
+            <h2>When this happens</h2>
+            <p class="muted">The trigger that starts the Zap.</p>
+          </div>
+        </header>
+
+        <p class="label">App</p>
+        <app-app-picker
+          label="Trigger app"
+          [apps]="triggerApps()"
+          [selected]="triggerApp()"
+          (picked)="pickTriggerApp($event)"
+        />
+        @if (showError(form.controls.trigger.controls.app)) {
+          <p class="error-text">
+            {{ errorText(form.controls.trigger.controls.app, 'Trigger app') }}
+          </p>
+        }
+
+        @if (triggerAppDef(); as app) {
+          <div class="field">
+            <label class="label" for="trigger-event">Trigger event</label>
+            <select
+              id="trigger-event"
+              class="input"
+              [value]="triggerEvent()"
+              (change)="pickTriggerEvent($any($event.target).value)"
+            >
+              <option value="" disabled>Choose an event</option>
+              @for (t of app.triggers; track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+            @if (trigger(); as t) {
+              <p class="help muted">{{ t.description }}</p>
+            }
+          </div>
+        }
+
+        @for (def of trigger()?.configFields ?? []; track def.key) {
+          @let ctrl = control(triggerConfig, def.key);
+          <div class="field">
+            <label class="label" [for]="'cfg-' + def.key">{{ def.label }}</label>
+            @if (def.type === 'repo') {
+              <div class="row">
+                <select class="input" [id]="'cfg-' + def.key" [formControl]="ctrl">
+                  <option value="" disabled>
+                    {{
+                      reposState() === 'loading' ? 'Loading repositories…' : 'Choose a repository'
+                    }}
+                  </option>
+                  @for (r of repoOptions(ctrl.value); track r.fullName) {
+                    <option [value]="r.fullName">
+                      {{ r.fullName }}{{ r.private ? ' (private)' : '' }}
+                    </option>
+                  }
+                </select>
+                <button
+                  type="button"
+                  class="btn"
+                  (click)="loadRepos(true)"
+                  [disabled]="reposState() === 'loading'"
+                >
+                  Refresh
+                </button>
+              </div>
+              @if (reposState() === 'error') {
+                <p class="error-text">Could not load your repositories from GitHub.</p>
+              } @else if (reposState() === 'ready' && !repos().length) {
+                <p class="help muted">
+                  No repositories with admin access found. Create one on GitHub, then press Refresh.
+                </p>
+              }
+            } @else {
+              <input
+                class="input"
+                [id]="'cfg-' + def.key"
+                [formControl]="ctrl"
+                [placeholder]="def.placeholder ?? ''"
+              />
+            }
+            @if (def.help) {
+              <p class="help muted">{{ def.help }}</p>
+            }
+            @if (showError(ctrl)) {
+              <p class="error-text">{{ errorText(ctrl, def.label) }}</p>
+            }
+          </div>
+        }
+      </section>
+
+      <div class="connector" aria-hidden="true">↓</div>
+
+      <!-- 2. Action -->
+      <section class="card step">
+        <header class="step__head">
+          <span class="step__num">2</span>
+          <div>
+            <h2>Do this</h2>
+            <p class="muted">What the Zap does each time it runs.</p>
+          </div>
+        </header>
+
+        <p class="label">App</p>
+        <app-app-picker
+          label="Action app"
+          [apps]="actionApps()"
+          [selected]="actionApp()"
+          (picked)="pickActionApp($event)"
+        />
+        @if (showError(form.controls.action.controls.app)) {
+          <p class="error-text">{{ errorText(form.controls.action.controls.app, 'Action app') }}</p>
+        }
+
+        @if (actionAppDef(); as app) {
+          <div class="field">
+            <label class="label" for="action-type">Action</label>
+            <select
+              id="action-type"
+              class="input"
+              [value]="actionType()"
+              (change)="pickActionType($any($event.target).value)"
+            >
+              <option value="" disabled>Choose an action</option>
+              @for (a of app.actions; track a.id) {
+                <option [value]="a.id">{{ a.name }}</option>
+              }
+            </select>
+            @if (action(); as a) {
+              <p class="help muted">{{ a.description }}</p>
+            }
+          </div>
+        }
+
+        @for (def of action()?.fields ?? []; track def.key) {
+          @let ctrl = control(actionFields, def.key);
+          <div class="field">
+            @if (def.type === 'template') {
+              <app-template-field
+                [field]="def"
+                [control]="ctrl"
+                [variables]="variables()"
+                [inputId]="'field-' + def.key"
+              />
+            } @else {
+              <label class="label" [for]="'field-' + def.key">{{ def.label }}</label>
+              <input
+                class="input"
+                [id]="'field-' + def.key"
+                [formControl]="ctrl"
+                [placeholder]="def.placeholder ?? ''"
+              />
+            }
+            @if (showError(ctrl)) {
+              <p class="error-text">{{ errorText(ctrl, def.label) }}</p>
+            }
+          </div>
+        }
+      </section>
+
+      <div class="connector" aria-hidden="true">↓</div>
+
+      <!-- 3. Name and status -->
+      <section class="card step">
+        <header class="step__head">
+          <span class="step__num">3</span>
+          <div>
+            <h2>Name and turn on</h2>
+            <p class="muted">Only Zaps that are on will run.</p>
+          </div>
+        </header>
+
+        <div class="field">
+          <label class="label" for="zap-name">Zap name</label>
+          <input id="zap-name" class="input" formControlName="name" maxlength="100" />
+          @if (showError(form.controls.name)) {
+            <p class="error-text">{{ errorText(form.controls.name, 'Name') }}</p>
+          }
+        </div>
+
+        <div class="field">
+          <span class="label">Status</span>
+          <app-status-toggle
+            [checked]="form.controls.enabled.value"
+            (changed)="setEnabled($event)"
+          />
+        </div>
+      </section>
+
+      @if (formError(); as message) {
+        <p class="alert" role="alert">{{ message }}</p>
+      }
+
+      <div class="actions">
+        <a class="btn" routerLink="/zaps">Cancel</a>
+        <button class="btn btn-primary" type="submit" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : isEdit() ? 'Save changes' : 'Create Zap' }}
+        </button>
+      </div>
+    </form>
+  }
+}

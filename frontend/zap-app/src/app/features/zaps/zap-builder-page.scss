@@ -1,0 +1,55 @@
+.page-head {
+  margin: 24px 0 16px;
+}
+.back {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+h1 {
+  font-size: 1.5rem;
+  margin: 4px 0 0;
+}
+.step__head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.step__head h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+.step__head p {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+}
+.step__num {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+.connector {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 6px 0;
+}
+.row {
+  display: flex;
+  gap: 8px;
+}
+.row .input {
+  flex: 1;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}

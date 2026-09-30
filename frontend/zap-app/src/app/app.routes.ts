@@ -15,5 +15,17 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./features/zaps/zap-list-page').then((m) => m.ZapListPage),
   },
+  {
+    path: 'zaps/new',
+    title: 'Create Zap · Zap App',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/zaps/zap-builder-page').then((m) => m.ZapBuilderPage),
+  },
+  {
+    path: 'zaps/:id',
+    title: 'Edit Zap · Zap App',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/zaps/zap-builder-page').then((m) => m.ZapBuilderPage),
+  },
   { path: '**', redirectTo: 'zaps' },
 ];

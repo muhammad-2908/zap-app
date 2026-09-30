@@ -102,3 +102,61 @@ body {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
+
+/* ---- Forms ---- */
+
+.field {
+  margin-top: 16px;
+}
+
+.label {
+  display: block;
+  margin: 0 0 6px;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+textarea.input {
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.input.ng-invalid.ng-touched,
+.input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.help {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+}
+
+.error-text {
+  margin: 6px 0 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.alert {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+}

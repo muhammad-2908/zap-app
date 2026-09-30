@@ -5,7 +5,7 @@ A small workflow automation app inspired by Zapier's Zaps: sign in with GitHub, 
 
 TypeScript throughout on the MEAN stack: MongoDB, Express 5, Angular 21, Node.js.
 
-> Status: **M1 — GitHub sign-in**. The Zap builder and the GitHub automation arrive in later milestones.
+> Status: **M2 — Zap builder**. Zaps can be created, listed, edited and turned on/off. Running them on real pull requests arrives in M3–M4.
 
 ## Time log
 
@@ -13,6 +13,7 @@ TypeScript throughout on the MEAN stack: MongoDB, Express 5, Angular 21, Node.js
 | --- | --- | --- |
 | M0 Skeleton | _fill in_ | _fill in_ |
 | M1 GitHub sign-in | _fill in_ | _fill in_ |
+| M2 Zap builder | _fill in_ | _fill in_ |
 
 ## Repository layout
 
@@ -106,8 +107,18 @@ comments with this token; asking once avoids a second consent screen.
 | GET | `/api/auth/github/callback` | `302` to `/zaps`, or to `/login?error=denied\|state\|github` |
 | GET | `/api/auth/me` | `200` current user (no token), `401 unauthenticated` |
 | POST | `/api/auth/logout` | `204`, clears the session cookie |
+| GET | `/api/catalog` | Apps, triggers, actions, fields and template variables |
+| GET | `/api/github/repos[?fresh=1]` | Repos the user can administer · `401 github_reauth_required` |
+| GET | `/api/zaps` | The caller's Zaps, newest first |
+| POST | `/api/zaps` | `201` Zap · `400 validation_error` with field `details` |
+| GET | `/api/zaps/:id` | `200` · `404 zap_not_found` (also for other users' Zaps) |
+| PATCH | `/api/zaps/:id` | Partial update incl. `enabled` · `400` · `404` |
 
 Errors always use `{ "error": { "code", "message", "details?" } }`.
+
+## Implementation notes
+
+Per-milestone code flow and business rules live in [`docs/implementaion`](docs/implementaion).
 
 ## Configuration errors
 

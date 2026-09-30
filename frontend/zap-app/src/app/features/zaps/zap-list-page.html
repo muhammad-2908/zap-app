@@ -52,6 +52,7 @@
                 [label]="'Turn ' + zap.name + (zap.enabled ? ' off' : ' on')"
                 (changed)="toggle(zap, $event)"
               />
+              <a class="btn btn-small" [routerLink]="['/zaps', zap.id, 'runs']">History</a>
               <a class="btn btn-small" [routerLink]="['/zaps', zap.id]">Edit</a>
             </div>
           </li>

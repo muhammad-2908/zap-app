@@ -22,6 +22,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/zaps/zap-builder-page').then((m) => m.ZapBuilderPage),
   },
   {
+    path: 'zaps/:id/runs',
+    title: 'Run history · Zap App',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/zaps/zap-runs-page').then((m) => m.ZapRunsPage),
+  },
+  {
     path: 'zaps/:id',
     title: 'Edit Zap · Zap App',
     canActivate: [authGuard],

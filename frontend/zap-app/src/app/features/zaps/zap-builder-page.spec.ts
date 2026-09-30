@@ -141,3 +141,43 @@ describe('ZapBuilderPage (create)', () => {
     expect(navigate).toHaveBeenCalledWith(['/zaps']);
   });
 });
+
+describe('ZapBuilderPage (edit)', () => {
+  it('deletes only after the second click and returns to the list', async () => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const fixture = TestBed.createComponent(ZapBuilderPage);
+    fixture.componentRef.setInput('id', 'z1');
+    fixture.detectChanges();
+    http.expectOne('/api/catalog').flush(CATALOG);
+    http.expectOne('/api/zaps/z1').flush({
+      id: 'z1',
+      name: 'Thank PR authors',
+      enabled: false,
+      trigger: {
+        app: 'github',
+        event: 'pull_request.opened',
+        config: { repoFullName: 'me/zap-test' },
+      },
+      action: { app: 'github', type: 'pull_request.comment', fields: { body: 'Hi' } },
+    });
+    http.expectOne('/api/github/repos').flush([]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.btn-danger-outline') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    http.expectNone({ method: 'DELETE' });
+
+    (el.querySelector('.btn-danger') as HTMLButtonElement).click();
+    const req = http.expectOne('/api/zaps/z1');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    expect(navigate).toHaveBeenCalledWith(['/zaps']);
+    http.verify();
+  });
+});

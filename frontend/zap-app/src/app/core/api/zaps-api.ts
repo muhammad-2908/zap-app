@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Zap, ZapInput } from '../models';
+import { Zap, ZapInput, ZapRun } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class ZapsApi {
@@ -21,5 +21,13 @@ export class ZapsApi {
 
   update(id: string, patch: Partial<ZapInput>): Observable<Zap> {
     return this.http.patch<Zap>(`/api/zaps/${encodeURIComponent(id)}`, patch);
+  }
+
+  remove(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/zaps/${encodeURIComponent(id)}`);
+  }
+
+  runs(id: string): Observable<ZapRun[]> {
+    return this.http.get<ZapRun[]>(`/api/zaps/${encodeURIComponent(id)}/runs`);
   }
 }

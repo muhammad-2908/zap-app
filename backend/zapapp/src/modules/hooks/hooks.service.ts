@@ -3,6 +3,7 @@ import { GitHubError, githubRequest } from '../../lib/github-client.js';
 import { HttpError } from '../../lib/http-error.js';
 import { logger } from '../../lib/logger.js';
 import { RepoHookModel, type RepoHookDoc } from '../../models/repo-hook.model.js';
+import { ZapModel } from '../../models/zap.model.js';
 import { withUserToken } from '../github/github.service.js';
 
 interface GitHubHook {
@@ -105,4 +106,33 @@ export async function ensureHook(userId: string, repo: string): Promise<RepoHook
 
 export async function findHookById(hookId: number): Promise<RepoHookDoc | null> {
   return RepoHookModel.findOne({ hookId }).lean<RepoHookDoc>();
+}
+
+/**
+ * Removes our webhook from `repo` once none of the user's Zaps use that repository any more
+ * (after a delete, or after a Zap moves to another repo). Best effort: failures are logged and the
+ * request that triggered the cleanup still succeeds. A hook left behind on GitHub is harmless:
+ * its deliveries match no Zap, and turning a Zap on again adopts it.
+ */
+export async function removeHookIfUnused(userId: string, repo: string): Promise<void> {
+  const stillUsed = await ZapModel.exists({ owner: userId, 'trigger.config.repoFullName': repo });
+  if (stillUsed) return;
+
+  const hook = await RepoHookModel.findOne({ owner: userId, repoFullName: repo }).lean<RepoHookDoc>();
+  if (!hook) return;
+
+  try {
+    await withUserToken(userId, async (token) => {
+      try {
+        await githubRequest<void>(token, `/repos/${repo}/hooks/${hook.hookId}`, { method: 'DELETE' });
+      } catch (err) {
+        // Already gone on GitHub: that's the state we want.
+        if (!(err instanceof GitHubError && err.status === 404)) throw err;
+      }
+    });
+    logger.info({ userId, repo, hookId: hook.hookId }, 'Webhook removed (no Zaps use this repository)');
+  } catch (err) {
+    logger.warn({ err, userId, repo, hookId: hook.hookId }, 'Could not remove webhook from GitHub');
+  }
+  await RepoHookModel.deleteOne({ _id: hook._id });
 }

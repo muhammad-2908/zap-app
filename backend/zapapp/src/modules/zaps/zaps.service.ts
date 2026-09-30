@@ -2,7 +2,8 @@ import { isValidObjectId } from 'mongoose';
 import { assertValidZap, type ZapShape } from '../../catalog/validate-zap.js';
 import { HttpError } from '../../lib/http-error.js';
 import { ZapModel, type ZapDoc } from '../../models/zap.model.js';
-import { ensureHook } from '../hooks/hooks.service.js';
+import { ZapRunModel, type ZapRunDoc } from '../../models/zap-run.model.js';
+import { ensureHook, removeHookIfUnused } from '../hooks/hooks.service.js';
 import type { CreateZapInput, UpdateZapInput } from './zaps.schema.js';
 
 export interface ZapDto extends ZapShape {
@@ -83,6 +84,7 @@ export async function createZap(
 export async function updateZap(ownerId: string, zapId: string, patch: UpdateZapInput): Promise<ZapDto> {
   const doc = await findOwned(ownerId, zapId);
   const current = shapeOf(plain(doc));
+  const previousRepo = repoOf(current);
 
   const merged: ZapShape = {
     name: patch.name ?? current.name,
@@ -102,5 +104,52 @@ export async function updateZap(ownerId: string, zapId: string, patch: UpdateZap
   doc.markModified('trigger.config');
   doc.markModified('action.fields');
   await doc.save();
+
+  // Moved to another repository: the old repo's webhook may now be unused.
+  if (previousRepo && previousRepo !== repoOf(merged)) await removeHookIfUnused(ownerId, previousRepo);
   return toDto(plain(doc));
+}
+
+/** Deletes the Zap and its run history, then removes the repo webhook if nothing else uses it. */
+export async function deleteZap(ownerId: string, zapId: string): Promise<void> {
+  const doc = await findOwned(ownerId, zapId);
+  const repo = repoOf(shapeOf(plain(doc)));
+  await ZapRunModel.deleteMany({ zap: doc._id });
+  await doc.deleteOne();
+  if (repo) await removeHookIfUnused(ownerId, repo);
+}
+
+export interface ZapRunDto {
+  id: string;
+  status: 'running' | 'success' | 'failed';
+  deliveryId: string;
+  repoFullName: string;
+  prNumber: number;
+  prUrl: string;
+  commentUrl: string | null;
+  renderedBody: string | null;
+  error: { code: string; message: string } | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+const RUNS_LIMIT = 20;
+
+/** Most recent runs of one of the caller's Zaps (404 for anyone else's). */
+export async function listRuns(ownerId: string, zapId: string): Promise<ZapRunDto[]> {
+  const zap = await findOwned(ownerId, zapId);
+  const runs = await ZapRunModel.find({ zap: zap._id }).sort({ createdAt: -1 }).limit(RUNS_LIMIT).lean<ZapRunDoc[]>();
+  return runs.map((r) => ({
+    id: r._id.toString(),
+    status: r.status,
+    deliveryId: r.deliveryId,
+    repoFullName: r.repoFullName,
+    prNumber: r.prNumber,
+    prUrl: `https://github.com/${r.repoFullName}/pull/${r.prNumber}`,
+    commentUrl: r.commentUrl ?? null,
+    renderedBody: r.renderedBody ?? null,
+    error: r.error ? { code: r.error.code, message: r.error.message } : null,
+    durationMs: r.durationMs ?? null,
+    createdAt: r.createdAt.toISOString(),
+  }));
 }

@@ -1,0 +1,72 @@
+<div class="page-head">
+  <a class="back" routerLink="/zaps">← Your Zaps</a>
+  <div class="page-head__row">
+    <h1>Run history</h1>
+    <button class="btn" type="button" (click)="load()" [disabled]="state() === 'loading'">
+      Refresh
+    </button>
+  </div>
+  @if (zap(); as z) {
+    <p class="muted">
+      <a [routerLink]="['/zaps', z.id]">{{ z.name }}</a> · last 20 runs ·
+      {{ z.enabled ? 'On' : 'Off' }}
+    </p>
+  }
+</div>
+
+@switch (state()) {
+  @case ('loading') {
+    <div class="card muted">Loading…</div>
+  }
+  @case ('not-found') {
+    <div class="card">
+      <p>
+        <strong>Zap not found.</strong> It may have been deleted, or it belongs to another account.
+      </p>
+      <a class="btn" routerLink="/zaps">Back to your Zaps</a>
+    </div>
+  }
+  @case ('error') {
+    <div class="card">
+      <p class="error-text">{{ error() }}</p>
+      <button class="btn" type="button" (click)="load()">Try again</button>
+    </div>
+  }
+  @case ('ready') {
+    @if (runs().length) {
+      <ul class="runs" aria-label="Runs">
+        @for (run of runs(); track run.id) {
+          <li class="card run" [class.run--failed]="run.status === 'failed'">
+            <div class="run__head">
+              <span class="badge" [attr.data-status]="run.status">{{ run.status }}</span>
+              <a [href]="run.prUrl" target="_blank" rel="noopener"
+                >{{ run.repoFullName }} #{{ run.prNumber }}</a
+              >
+              <span class="muted" [title]="run.createdAt | date: 'medium'">{{
+                relativeTime(run.createdAt)
+              }}</span>
+              @if (run.durationMs !== null) {
+                <span class="muted">· {{ run.durationMs }} ms</span>
+              }
+            </div>
+            @if (run.status === 'success') {
+              <p class="run__body">{{ run.renderedBody }}</p>
+              @if (run.commentUrl) {
+                <a class="run__link" [href]="run.commentUrl" target="_blank" rel="noopener"
+                  >View comment on GitHub</a
+                >
+              }
+            } @else if (run.error) {
+              <p class="error-text">{{ run.error.message }}</p>
+            }
+          </li>
+        }
+      </ul>
+    } @else {
+      <div class="card empty">
+        <p class="empty__title">No runs yet</p>
+        <p class="muted">Turn the Zap on and open a pull request on its repository.</p>
+      </div>
+    }
+  }
+}

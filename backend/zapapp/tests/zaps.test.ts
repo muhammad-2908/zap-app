@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Auth is mocked at the user lookup; Mongo is replaced by spies on the Zap model so the tests can
 // assert the exact queries, in particular that every lookup is scoped to the signed-in owner.
 vi.mock('../src/modules/users/users.service.js', () => ({ findUserById: vi.fn() }));
-vi.mock('../src/modules/hooks/hooks.service.js', () => ({ ensureHook: vi.fn() }));
+vi.mock('../src/modules/hooks/hooks.service.js', () => ({ ensureHook: vi.fn(), removeHookIfUnused: vi.fn() }));
 
 const { buildApp } = await import('../src/app.js');
 const { signSession } = await import('../src/lib/session.js');
@@ -13,6 +13,7 @@ const users = await import('../src/modules/users/users.service.js');
 const { ZapModel } = await import('../src/models/zap.model.js');
 const hooks = await import('../src/modules/hooks/hooks.service.js');
 const { HttpError } = await import('../src/lib/http-error.js');
+const { ZapRunModel } = await import('../src/models/zap-run.model.js');
 
 const ALICE = { id: new Types.ObjectId().toString(), githubId: 1, login: 'alice', name: null, avatarUrl: null, tokenStatus: 'valid' as const };
 
@@ -39,6 +40,7 @@ function fakeDoc(owner: string, overrides: Record<string, unknown> = {}) {
   };
   const doc = {
     _id,
+    deleteOne: vi.fn(async () => ({ deletedCount: 1 })),
     toObject: () => ({ ...data }),
     set: (patch: Record<string, unknown>) => Object.assign(data, patch),
     markModified: vi.fn(),
@@ -59,6 +61,7 @@ describe('Zaps API', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.mocked(hooks.ensureHook).mockReset();
+    vi.mocked(hooks.removeHookIfUnused).mockReset();
   });
 
   it('requires a session', async () => {
@@ -215,5 +218,73 @@ describe('Zaps API', () => {
     const byId = Object.fromEntries(res.body.map((a: { id: string; available: boolean }) => [a.id, a.available]));
     expect(byId).toMatchObject({ github: true, gitlab: false, slack: false });
     expect(res.body.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('deletes a Zap with its runs and cleans up the webhook', async () => {
+    const doc = fakeDoc(ALICE.id);
+    vi.spyOn(ZapModel, 'findOne').mockResolvedValue(doc as never);
+    const deleteRuns = vi.spyOn(ZapRunModel, 'deleteMany').mockResolvedValue({} as never);
+
+    const res = await request(app).delete(`/api/zaps/${doc._id}`).set('Cookie', cookie);
+    expect(res.status).toBe(204);
+    expect(deleteRuns).toHaveBeenCalledWith({ zap: doc._id });
+    expect(doc.deleteOne).toHaveBeenCalled();
+    expect(hooks.removeHookIfUnused).toHaveBeenCalledWith(ALICE.id, 'alice/zap-test');
+  });
+
+  it('404s when deleting someone else\'s Zap', async () => {
+    const findOne = vi.spyOn(ZapModel, 'findOne').mockResolvedValue(null);
+    const id = new Types.ObjectId().toString();
+    const res = await request(app).delete(`/api/zaps/${id}`).set('Cookie', cookie);
+    expect(res.status).toBe(404);
+    expect(findOne).toHaveBeenCalledWith({ _id: id, owner: ALICE.id });
+    expect(hooks.removeHookIfUnused).not.toHaveBeenCalled();
+  });
+
+  it('cleans up the old repo\'s webhook when a Zap moves to another repo', async () => {
+    const doc = fakeDoc(ALICE.id);
+    vi.spyOn(ZapModel, 'findOne').mockResolvedValue(doc as never);
+    const trigger = { app: 'github', event: 'pull_request.opened', config: { repoFullName: 'alice/other' } };
+    const res = await request(app).patch(`/api/zaps/${doc._id}`).set('Cookie', cookie).send({ trigger });
+    expect(res.status).toBe(200);
+    expect(hooks.removeHookIfUnused).toHaveBeenCalledWith(ALICE.id, 'alice/zap-test');
+  });
+
+  it('lists the most recent runs of an owned Zap', async () => {
+    const doc = fakeDoc(ALICE.id);
+    vi.spyOn(ZapModel, 'findOne').mockResolvedValue(doc as never);
+    const run = {
+      _id: new Types.ObjectId(),
+      zap: doc._id,
+      status: 'success',
+      deliveryId: 'd-1',
+      repoFullName: 'alice/zap-test',
+      prNumber: 7,
+      commentUrl: 'https://github.com/alice/zap-test/pull/7#issuecomment-1',
+      renderedBody: 'Thanks @bob!',
+      error: null,
+      durationMs: 420,
+      createdAt: new Date('2026-09-30T10:00:00Z'),
+    };
+    const lean = vi.fn().mockResolvedValue([run]);
+    const limit = vi.fn().mockReturnValue({ lean });
+    const sort = vi.fn().mockReturnValue({ limit });
+    const find = vi.spyOn(ZapRunModel, 'find').mockReturnValue({ sort } as never);
+
+    const res = await request(app).get(`/api/zaps/${doc._id}/runs`).set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    expect(find).toHaveBeenCalledWith({ zap: doc._id });
+    expect(limit).toHaveBeenCalledWith(20);
+    expect(res.body[0]).toMatchObject({
+      status: 'success',
+      prNumber: 7,
+      prUrl: 'https://github.com/alice/zap-test/pull/7',
+      createdAt: '2026-09-30T10:00:00.000Z',
+    });
+  });
+
+  it('never lets API responses be cached', async () => {
+    const res = await request(app).get('/api/zaps/not-an-id').set('Cookie', cookie);
+    expect(res.headers['cache-control']).toBe('no-store');
   });
 });

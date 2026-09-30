@@ -12,7 +12,8 @@ vi.mock('../src/modules/users/users.service.js', () => ({
 
 const github = await import('../src/lib/github-client.js');
 const { RepoHookModel } = await import('../src/models/repo-hook.model.js');
-const { ensureHook } = await import('../src/modules/hooks/hooks.service.js');
+const { ensureHook, removeHookIfUnused } = await import('../src/modules/hooks/hooks.service.js');
+const { ZapModel } = await import('../src/models/zap.model.js');
 
 const USER = new Types.ObjectId().toString();
 const REPO = 'alice/zap-test';
@@ -115,5 +116,44 @@ describe('ensureHook', () => {
     mockExisting(null);
     vi.mocked(github.githubRequest).mockRejectedValue(new github.GitHubError(401, 'Bad credentials'));
     await expect(ensureHook(USER, REPO)).rejects.toMatchObject({ status: 401, code: 'github_reauth_required' });
+  });
+});
+
+describe('removeHookIfUnused', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.mocked(github.githubRequest).mockReset();
+  });
+
+  it('keeps the hook while another Zap still uses the repo', async () => {
+    vi.spyOn(ZapModel, 'exists').mockResolvedValue({ _id: new Types.ObjectId() } as never);
+    const del = vi.spyOn(RepoHookModel, 'deleteOne');
+    await removeHookIfUnused(USER, REPO);
+    expect(github.githubRequest).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it('deletes the GitHub hook and our record when the repo is no longer used', async () => {
+    vi.spyOn(ZapModel, 'exists').mockResolvedValue(null);
+    mockExisting(555);
+    const del = vi.spyOn(RepoHookModel, 'deleteOne').mockResolvedValue({} as never);
+    vi.mocked(github.githubRequest).mockResolvedValue(undefined);
+
+    await removeHookIfUnused(USER, REPO);
+
+    expect(github.githubRequest).toHaveBeenCalledWith('gho_token', '/repos/alice/zap-test/hooks/555', { method: 'DELETE' });
+    expect(del).toHaveBeenCalled();
+  });
+
+  it('treats an already-deleted GitHub hook as success and never throws', async () => {
+    vi.spyOn(ZapModel, 'exists').mockResolvedValue(null);
+    mockExisting(555);
+    const del = vi.spyOn(RepoHookModel, 'deleteOne').mockResolvedValue({} as never);
+    vi.mocked(github.githubRequest).mockRejectedValue(new github.GitHubError(404, 'Not Found'));
+    await expect(removeHookIfUnused(USER, REPO)).resolves.toBeUndefined();
+    expect(del).toHaveBeenCalled();
+
+    vi.mocked(github.githubRequest).mockRejectedValue(new github.GitHubError(500, 'boom'));
+    await expect(removeHookIfUnused(USER, REPO)).resolves.toBeUndefined();
   });
 });

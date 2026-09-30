@@ -100,3 +100,19 @@ export interface Repo {
   htmlUrl: string;
   updatedAt: string;
 }
+
+// ---- Runs (/api/zaps/:id/runs) ----
+
+export interface ZapRun {
+  id: string;
+  status: 'running' | 'success' | 'failed';
+  deliveryId: string;
+  repoFullName: string;
+  prNumber: number;
+  prUrl: string;
+  commentUrl: string | null;
+  renderedBody: string | null;
+  error: { code: string; message: string } | null;
+  durationMs: number | null;
+  createdAt: string;
+}

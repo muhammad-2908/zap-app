@@ -34,6 +34,12 @@ export function buildApp(): Express {
 
   app.use(express.json({ limit: '100kb' }));
 
+  // API responses are per-user: never let a browser or proxy cache them (the catalog opts back in).
+  app.use('/api', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
+
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/catalog', catalogRouter);

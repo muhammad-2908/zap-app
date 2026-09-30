@@ -9,6 +9,7 @@
   --accent-hover: #e84a12;
   --accent-contrast: #ffffff;
   --ok: #1f9d55;
+  --link: #1f6feb;
   --danger: #d93025;
   --danger-soft: #fdecea;
   --radius: 10px;
@@ -25,6 +26,7 @@
     --text: #eceef0;
     --text-muted: #9ba1a6;
     --danger-soft: #3a1d1b;
+    --link: #58a6ff;
     --shadow: none;
   }
 }
@@ -41,6 +43,10 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 15px/1.5 var(--font);
+}
+
+a {
+  color: var(--link);
 }
 
 .container {
@@ -159,4 +165,19 @@ textarea.input {
   border-radius: 8px;
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.btn-danger-outline {
+  color: var(--danger);
+  border-color: var(--danger-soft);
+}
+
+.btn-danger-outline:hover:not(:disabled) {
+  border-color: var(--danger);
 }

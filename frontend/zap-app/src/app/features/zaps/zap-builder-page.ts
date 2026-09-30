@@ -52,6 +52,9 @@ export class ZapBuilderPage implements OnInit {
   protected readonly repos = signal<Repo[]>([]);
   protected readonly reposState = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly saving = signal(false);
+  protected readonly deleting = signal(false);
+  /** Two-step delete: first click asks, second confirms. */
+  protected readonly confirmDelete = signal(false);
   protected readonly formError = signal<string | null>(null);
   protected readonly isEdit = computed(() => !!this.id());
 
@@ -204,6 +207,23 @@ export class ZapBuilderPage implements OnInit {
         this.formError.set(
           unmatched.length ? unmatched.join(' ') : apiErrorMessage(err, 'Could not save the Zap.'),
         );
+      },
+    });
+  }
+
+  protected deleteZap(): void {
+    const id = this.id();
+    if (!id) return;
+    this.deleting.set(true);
+    this.zapsApi.remove(id).subscribe({
+      next: () => {
+        this.toast.success(`Deleted "${this.form.controls.name.value}"`);
+        void this.router.navigate(['/zaps']);
+      },
+      error: (err) => {
+        this.deleting.set(false);
+        this.confirmDelete.set(false);
+        this.toast.error(apiErrorMessage(err, 'Could not delete the Zap.'));
       },
     });
   }

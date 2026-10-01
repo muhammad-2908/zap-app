@@ -16,6 +16,7 @@ TypeScript throughout on the MEAN stack: MongoDB, Express 5, Angular 21, Node.js
 | M3 Webhooks | _fill in_ | 10 mins |
 | M4 PR comment | _fill in_ | 25 mins |
 | M5 Hardening + README | _fill in_ | 20 mins |
+| M6 Copilot (bonus) | _fill in_ | _fill in_ |
 
 Overall: started _fill in_, stopped _fill in_.
 
@@ -28,6 +29,9 @@ Overall: started _fill in_, stopped _fill in_.
 - **Zaps list**: status toggle, last run ("Commented 2 minutes ago" / "Failed · reason"), run history, edit, delete.
 - **Automation**: turning a Zap on installs a webhook on the repository. When a PR is opened, GitHub notifies the
   API, which verifies the signature, finds the owner's enabled Zaps for that repo and posts the comment on the PR.
+- **Copilot** (bonus): describe a Zap in plain English ("When a pull request is opened, comment thanks.") and
+  the builder opens with a draft to review. It is never turned on automatically. Uses an OpenAI GPT model when
+  `OPENAI_API_KEY` is set, and a small rule-based parser otherwise.
 - Zaps are private to their owner; another user's Zap behaves as if it didn't exist (404).
 
 ## Architecture
@@ -48,6 +52,7 @@ Browser ── Angular 21 (:4200) ──/api proxy──► Express 5 API (:3000
 | **Backend-owned catalog** (`catalog.ts`) | One source of truth for the picker, validation and template variables. Adding an app = a catalog entry + a handler in `engine/registry.ts`. |
 | **Idempotent runs** (unique `zap + deliveryId`) | GitHub retries and manual redeliveries never double-comment. |
 | Webhook answered **202 first**, Zaps run after | GitHub gives up after 10 s. |
+| Copilot = **OpenAI Structured Outputs with a strict JSON schema built from the catalog**, validated like any Zap | The model can only choose runnable apps/events/actions and the user's own repos; drafts are never enabled. |
 | Same-origin dev proxy + JWT in an httpOnly, SameSite=Lax cookie | No CORS, token never readable by scripts, cross-site POSTs don't carry the cookie. |
 
 Per-milestone code flow and business rules: [`docs/implementaion`](docs/implementaion).
@@ -98,6 +103,9 @@ copy .env.example .env        # macOS/Linux: cp .env.example .env
 | `GITHUB_OAUTH_CALLBACK_URL` | `http://localhost:4200/api/auth/github/callback` |
 | `PUBLIC_WEBHOOK_URL` | `https://<your-static-domain>.ngrok-free.app/api/webhooks/github` |
 | `JWT_SECRET`, `TOKEN_ENCRYPTION_KEY`, `GITHUB_WEBHOOK_SECRET` | Each: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
+| `OPENAI_API_KEY` | Optional, for the AI Copilot (platform.openai.com). Empty = rule-based Copilot |
+| `OPENAI_MODEL` | Optional, default `gpt-6-luna` (any model with Structured Outputs) |
+| `CORS_ORIGINS` | Optional, comma-separated extra browser origins allowed to call the API with cookies (`FRONTEND_URL` is always allowed) |
 | `PORT`, `FRONTEND_URL`, `LOG_LEVEL`, `SESSION_TTL_HOURS` | Defaults are fine |
 
 The API validates this file at startup and refuses to start with a clear list of problems (missing value,
@@ -133,6 +141,8 @@ ngrok http 3000 --url=https://<your-static-domain>.ngrok-free.app
    **History** shows the run with a link to the comment.
 5. Redeliver the event (Settings → Webhooks → Recent Deliveries → Redeliver): no second comment.
 6. Turn the Zap **Off** and open another PR: no comment.
+7. **Copilot**: on the Zap list, type "When a pull request is opened, comment thanks." → **Draft Zap**. The builder
+   opens pre-filled and **Off** with a "Drafted by Copilot" banner; pick the repository, review, save, turn it on.
 
 ## Tests
 
@@ -160,6 +170,7 @@ ngrok http 3000 --url=https://<your-static-domain>.ngrok-free.app
 | PATCH | `/api/zaps/:id` | Partial update incl. `enabled` · `400` · `404` · `422` |
 | DELETE | `/api/zaps/:id` | `204` (also deletes its runs; removes the repo webhook if no Zap uses it) · `404` |
 | GET | `/api/zaps/:id/runs` | Last 20 runs · `404` |
+| POST | `/api/copilot/draft` | `{ prompt }` → `{ draft, warnings, mode }` (nothing saved) · `400` · `422 copilot_unsupported` · `429` |
 | POST | `/api/webhooks/github` | GitHub only, HMAC-signed · `200` ping · `202` PR opened · `204` ignored · `401` bad signature |
 
 Errors always use `{ "error": { "code", "message", "details?" } }`.
@@ -172,6 +183,7 @@ Errors always use `{ "error": { "code", "message", "details?" } }`.
 - OAuth `state` cookie checked with a constant-time compare (CSRF on the login callback).
 - Webhooks: HMAC-SHA256 signature verified on the raw body, constant-time, before any database access.
 - Every Zap query is scoped to the owner; request bodies are strict (unknown keys such as `owner` are rejected).
+- CORS limited to `FRONTEND_URL` + `CORS_ORIGINS` (with credentials); other origins get no CORS headers.
 - `helmet` headers, JSON body limit 100 kb, `Cache-Control: no-store` on API responses, auth headers,
   cookies and OAuth query strings redacted from logs.
 
@@ -184,11 +196,11 @@ backend/zapapp/src
   catalog/                     apps/triggers/actions + Zap validation
   lib/                         crypto, session, GitHub client, template, webhook signature, logger
   models/                      user, zap, repo-hook, zap-run
-  modules/auth|zaps|github|hooks|webhooks|engine|catalog|health
+  modules/auth|zaps|github|hooks|webhooks|engine|catalog|copilot|health
 backend/zapapp/tests           unit tests; tests/integration = real MongoDB
 frontend/zap-app/src/app
   core/                        API clients, auth, guards, interceptor, models, toasts
-  features/auth, features/zaps list, builder, run history, components
+  features/auth, features/zaps (list, builder, run history), features/copilot
 docs/implementaion             per-milestone implementation notes
 ```
 
@@ -198,7 +210,7 @@ docs/implementaion             per-milestone implementation notes
 - Comments are posted as the signed-in user; a GitHub App would give a bot identity and finer permissions.
 - The repo picker loads the first 100 repositories with admin access.
 - Zaps run in-process after the webhook response; a queue (with retries and back-off) would survive restarts.
-- No rate limiting on the API yet.
+- No general rate limiting on the API (only the Copilot is limited, 10 drafts per minute per user).
 - Stateless sessions can't be revoked before they expire (8 h).
 
 ## How AI was used

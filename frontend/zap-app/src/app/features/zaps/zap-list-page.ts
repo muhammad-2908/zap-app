@@ -7,13 +7,14 @@ import { HealthApi } from '../../core/api/health-api';
 import { ZapsApi } from '../../core/api/zaps-api';
 import { CatalogApp, Health, Zap } from '../../core/models';
 import { ToastService } from '../../core/ui/toast-service';
+import { CopilotPanel } from '../copilot/copilot-panel';
 import { StatusToggle } from './components/status-toggle';
 import { relativeTime } from './relative-time';
 
 /** /zaps — the signed-in user's Zaps with on/off toggles. */
 @Component({
   selector: 'app-zap-list-page',
-  imports: [RouterLink, StatusToggle],
+  imports: [RouterLink, StatusToggle, CopilotPanel],
   templateUrl: './zap-list-page.html',
   styleUrl: './zap-list-page.scss',
 })

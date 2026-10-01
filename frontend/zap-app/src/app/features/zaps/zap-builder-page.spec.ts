@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { CatalogApp } from '../../core/models';
+import { DraftStore } from '../copilot/draft-store';
 import { ZapBuilderPage } from './zap-builder-page';
 
 const CATALOG: CatalogApp[] = [
@@ -178,6 +179,59 @@ describe('ZapBuilderPage (edit)', () => {
     expect(req.request.method).toBe('DELETE');
     req.flush(null, { status: 204, statusText: 'No Content' });
     expect(navigate).toHaveBeenCalledWith(['/zaps']);
+    http.verify();
+  });
+});
+
+describe('ZapBuilderPage (from Copilot)', () => {
+  it('loads the draft off, shows the review banner and saves it as a Copilot Zap', async () => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    TestBed.inject(DraftStore).set({
+      mode: 'llm',
+      warnings: ['Pick the repository this Zap should watch.'],
+      draft: {
+        name: 'Thank PR authors',
+        enabled: true,
+        trigger: { app: 'github', event: 'pull_request.opened', config: { repoFullName: '' } },
+        action: {
+          app: 'github',
+          type: 'pull_request.comment',
+          fields: { body: 'Thanks @{{pr.author}}!' },
+        },
+      },
+    });
+    const fixture = TestBed.createComponent(ZapBuilderPage);
+    fixture.componentRef.setInput('from', 'copilot');
+    fixture.detectChanges();
+    http.expectOne('/api/catalog').flush(CATALOG);
+    http.expectOne('/api/github/repos').flush([{ fullName: 'me/zap-test', private: false }]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.copilot-banner')?.textContent).toContain('Pick the repository');
+    const page = fixture.componentInstance as unknown as {
+      form: ZapBuilderPage['form'];
+      save(): void;
+    };
+    expect(page.form.controls.enabled.value).toBe(false);
+    expect(page.form.controls.action.controls.fields.controls['body']!.value).toBe(
+      'Thanks @{{pr.author}}!',
+    );
+
+    page.form.controls.trigger.controls.config.controls['repoFullName']!.setValue('me/zap-test');
+    page.save();
+    const req = http.expectOne('/api/zaps');
+    expect(req.request.body).toMatchObject({
+      name: 'Thank PR authors',
+      enabled: false,
+      source: 'copilot',
+    });
+    req.flush({ id: 'z1', name: 'Thank PR authors' });
     http.verify();
   });
 });

@@ -77,6 +77,8 @@ export interface ZapInput {
   enabled: boolean;
   trigger: { app: string; event: string; config: Record<string, string> };
   action: { app: string; type: string; fields: Record<string, string> };
+  /** Only sent on create: whether the Zap started as a Copilot draft. */
+  source?: 'manual' | 'copilot';
 }
 
 export interface Zap extends ZapInput {
@@ -115,4 +117,12 @@ export interface ZapRun {
   error: { code: string; message: string } | null;
   durationMs: number | null;
   createdAt: string;
+}
+
+// ---- Copilot (/api/copilot/draft) ----
+
+export interface CopilotDraft {
+  draft: ZapInput;
+  warnings: string[];
+  mode: 'llm' | 'rules';
 }

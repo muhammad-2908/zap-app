@@ -1,11 +1,14 @@
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
+import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { catalogRouter } from './modules/catalog/catalog.routes.js';
+import { copilotRouter } from './modules/copilot/copilot.routes.js';
 import { githubRouter } from './modules/github/github.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { webhooksRouter } from './modules/webhooks/webhooks.routes.js';
@@ -16,6 +19,18 @@ export function buildApp(): Express {
   const app = express();
 
   app.use(helmet());
+
+  // CORS: only listed origins may call the API from a browser, with cookies (credentials).
+  // Requests without an Origin header (GitHub webhooks, curl, the Angular dev proxy) are unaffected.
+  const allowedOrigins = new Set([new URL(env.FRONTEND_URL).origin, ...env.CORS_ORIGINS]);
+  app.use(
+    cors({
+      origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
+      credentials: true,
+      methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      maxAge: 600,
+    }),
+  );
   app.use(
     pinoHttp({
       logger,
@@ -45,6 +60,7 @@ export function buildApp(): Express {
   app.use('/api/catalog', catalogRouter);
   app.use('/api/github', githubRouter);
   app.use('/api/zaps', zapsRouter);
+  app.use('/api/copilot', copilotRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

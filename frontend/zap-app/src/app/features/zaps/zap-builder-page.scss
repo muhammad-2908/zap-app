@@ -61,3 +61,14 @@ h1 {
   gap: 8px;
   margin-right: auto;
 }
+.copilot-banner {
+  margin-bottom: 16px;
+  border-color: var(--accent);
+}
+.copilot-banner p {
+  margin: 0;
+}
+.copilot-banner ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}

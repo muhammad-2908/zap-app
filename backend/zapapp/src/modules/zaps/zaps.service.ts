@@ -69,15 +69,12 @@ export async function getZap(ownerId: string, zapId: string): Promise<ZapDto> {
   return toDto(plain(await findOwned(ownerId, zapId)));
 }
 
-export async function createZap(
-  ownerId: string,
-  input: CreateZapInput,
-  source: 'manual' | 'copilot' = 'manual',
-): Promise<ZapDto> {
-  assertValidZap(input);
+export async function createZap(ownerId: string, input: CreateZapInput): Promise<ZapDto> {
+  const { source, ...zap } = input;
+  assertValidZap(zap);
   // An enabled Zap must be able to fire: install the webhook first; if that fails, nothing is saved.
-  if (input.enabled) await ensureHook(ownerId, repoOf(input));
-  const doc = await ZapModel.create({ ...input, owner: ownerId, source });
+  if (zap.enabled) await ensureHook(ownerId, repoOf(zap));
+  const doc = await ZapModel.create({ ...zap, owner: ownerId, source });
   return toDto(doc.toObject() as unknown as ZapDoc);
 }
 

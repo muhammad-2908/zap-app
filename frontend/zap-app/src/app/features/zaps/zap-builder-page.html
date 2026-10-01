@@ -22,6 +22,23 @@
     </div>
   }
   @case ('ready') {
+    @if (copilot(); as c) {
+      <div class="card copilot-banner" role="status">
+        <p>
+          <strong>Drafted by Copilot</strong>&ngsp;<span class="muted"
+            >({{ c.mode === 'llm' ? 'AI' : 'simple parser' }})</span
+          >
+          — review every step before saving. It stays off until you turn it on.
+        </p>
+        @if (c.warnings.length) {
+          <ul>
+            @for (w of c.warnings; track w) {
+              <li>{{ w }}</li>
+            }
+          </ul>
+        }
+      </div>
+    }
     <form [formGroup]="form" (ngSubmit)="save()" novalidate>
       <!-- 1. Trigger -->
       <section class="card step">

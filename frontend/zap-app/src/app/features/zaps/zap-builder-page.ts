@@ -14,9 +14,10 @@ import { apiErrorMessage, apiIssues } from '../../core/api/api-errors';
 import { CatalogApi, findAction, findApp, findTrigger } from '../../core/api/catalog-api';
 import { GithubApi } from '../../core/api/github-api';
 import { ZapsApi } from '../../core/api/zaps-api';
-import { CatalogApp, FieldDef, Repo, Zap, ZapInput } from '../../core/models';
+import { CatalogApp, CopilotDraft, FieldDef, Repo, ZapInput } from '../../core/models';
 import { extractVariables } from '../../core/template';
 import { ToastService } from '../../core/ui/toast-service';
+import { DraftStore } from '../copilot/draft-store';
 import { AppPicker } from './components/app-picker';
 import { StatusToggle } from './components/status-toggle';
 import { TemplateField } from './components/template-field';
@@ -39,12 +40,18 @@ const requiredTrimmed: ValidatorFn = (c: AbstractControl): ValidationErrors | nu
 export class ZapBuilderPage implements OnInit {
   /** Route param :id (edit mode). Undefined on /zaps/new. */
   readonly id = input<string>();
+  /** Query param: "copilot" when opened with a Copilot draft. */
+  readonly from = input<string>();
 
   private readonly catalogApi = inject(CatalogApi);
   private readonly zapsApi = inject(ZapsApi);
   private readonly githubApi = inject(GithubApi);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly drafts = inject(DraftStore);
+
+  /** The Copilot draft this page was opened with, shown as a review banner. */
+  protected readonly copilot = signal<CopilotDraft | null>(null);
 
   protected readonly pageState = signal<'loading' | 'ready' | 'not-found' | 'error'>('loading');
   protected readonly pageError = signal('');
@@ -110,8 +117,15 @@ export class ZapBuilderPage implements OnInit {
     }).subscribe({
       next: ({ catalog, zap }) => {
         this.catalog.set(catalog);
+        const draft = !zap && this.from() === 'copilot' ? this.drafts.take() : null;
         if (zap) this.populate(zap);
-        else this.startNew();
+        else if (draft) {
+          this.copilot.set(draft);
+          // Never turned on by the Copilot: the user reviews and switches it on.
+          this.populate({ ...draft.draft, enabled: false });
+          // Show what still needs attention (e.g. the repository) right away.
+          this.form.markAllAsTouched();
+        } else this.startNew();
         this.pageState.set('ready');
       },
       error: (err: { status?: number }) => {
@@ -192,6 +206,7 @@ export class ZapBuilderPage implements OnInit {
       trigger: { app: value.trigger.app, event: value.trigger.event, config: value.trigger.config },
       action: { app: value.action.app, type: value.action.type, fields: value.action.fields },
     };
+    if (!this.isEdit()) input.source = this.copilot() ? 'copilot' : 'manual';
 
     const id = this.id();
     this.saving.set(true);
@@ -283,7 +298,7 @@ export class ZapBuilderPage implements OnInit {
     }
   }
 
-  private populate(zap: Zap): void {
+  private populate(zap: ZapInput): void {
     this.form.controls.name.setValue(zap.name);
     this.form.controls.enabled.setValue(zap.enabled);
     this.pickTriggerApp(zap.trigger.app, zap.trigger.config);

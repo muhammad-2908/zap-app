@@ -13,10 +13,20 @@ const base64Key32 = (name: string) =>
     `${name} must be 32 random bytes in base64 (generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")`,
   );
 
+/** Optional value: an empty string in .env means "not set". */
+const optionalString = z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().optional());
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   FRONTEND_URL: z.url({ message: 'FRONTEND_URL must be a URL, e.g. http://localhost:4200' }),
+  // Extra browser origins allowed to call the API with credentials (comma-separated), besides FRONTEND_URL.
+  CORS_ORIGINS: optionalString.transform((v) =>
+    (v ?? '')
+      .split(',')
+      .map((o) => o.trim().replace(/\/+$/, ''))
+      .filter(Boolean),
+  ),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   MONGODB_URI: noPlaceholder('MONGODB_URI').refine(
@@ -45,6 +55,10 @@ const EnvSchema = z.object({
     (v) => v.length >= 20,
     'GITHUB_WEBHOOK_SECRET must be at least 20 characters (use the randomBytes(32) command)',
   ),
+
+  // Copilot (optional). Without a key the Copilot uses a rule-based parser.
+  OPENAI_API_KEY: optionalString,
+  OPENAI_MODEL: optionalString.transform((v) => v ?? 'gpt-6-luna'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -27,6 +27,8 @@ export const CreateZapSchema = z
     enabled: z.boolean().default(false),
     trigger: TriggerInput,
     action: ActionInput,
+    /** Set by the builder when the Zap started as a Copilot draft. */
+    source: z.enum(['manual', 'copilot']).default('manual'),
   })
   .strict();
 
